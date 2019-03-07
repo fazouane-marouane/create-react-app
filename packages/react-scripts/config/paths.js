@@ -13,6 +13,7 @@ const fs = require('fs');
 const url = require('url');
 const PackageGraph = require('@lerna/package-graph');
 const Project = require('@lerna/project');
+const { getPackagesSync } = require('./lerna');
 
 // Make sure any symlinks in the project folder are resolved:
 // https://github.com/facebook/create-react-app/issues/637
@@ -21,22 +22,30 @@ const resolveApp = relativePath => path.resolve(appDirectory, relativePath);
 
 const appName = require(resolveApp('package.json')).name;
 
-const getAppSrc = async (appSrc) => {
+const getAppSrc = (appSrc) => {
   const project = new Project(process.cwd());
-  const packages = await project.getPackages();
+  const packages = getPackagesSync(project);
   const packageGraph = new PackageGraph(packages, 'allDependencies', 'forceLocal');
   const currentNode = packageGraph.get(appName);
   if (!currentNode) {
-    return appSrc;
+    return {
+      appSrc,
+      fullAppSrcs: appSrc,
+    };
   }
   const currentNodeModules = currentNode.pkg.nodeModulesLocation;
   const dependencies = Array.from(currentNode.localDependencies.keys());
 
-  const additionalSrcPaths = dependencies
-    .map(dependencyName => path.resolve(path.join(currentNodeModules, dependencyName), 'src'));
+  const additionalSrcPaths = dependencies.map((dependencyName) => {
+    const resolvedPath = fs.realpathSync(path.resolve(currentNodeModules, dependencyName));
+    return path.resolve(resolvedPath, 'src');
+  });
 
-  return [appSrc, ...additionalSrcPaths];
-}
+  return {
+    appSrc,
+    fullAppSrcs: [appSrc, ...additionalSrcPaths]
+  };
+};
 
 const envPublicUrl = process.env.PUBLIC_URL;
 
@@ -103,7 +112,7 @@ module.exports = {
   appHtml: resolveApp('public/index.html'),
   appIndexJs: resolveModule(resolveApp, 'src/index'),
   appPackageJson: resolveApp('package.json'),
-  appSrc: getAppSrc(resolveApp('src')),
+  ...getAppSrc(resolveApp('src')),
   appTsConfig: resolveApp('tsconfig.json'),
   yarnLockFile: resolveApp('yarn.lock'),
   testsSetup: resolveModule(resolveApp, 'src/setupTests'),
@@ -125,7 +134,7 @@ module.exports = {
   appHtml: resolveApp('public/index.html'),
   appIndexJs: resolveModule(resolveApp, 'src/index'),
   appPackageJson: resolveApp('package.json'),
-  appSrc: getAppSrc(resolveApp('src')),
+  ...getAppSrc(resolveApp('src')),
   appTsConfig: resolveApp('tsconfig.json'),
   yarnLockFile: resolveApp('yarn.lock'),
   testsSetup: resolveModule(resolveApp, 'src/setupTests'),
@@ -159,7 +168,7 @@ if (
     appHtml: resolveOwn('template/public/index.html'),
     appIndexJs: resolveModule(resolveOwn, 'template/src/index'),
     appPackageJson: resolveOwn('package.json'),
-    appSrc: getAppSrc(resolveOwn('template/src')),
+    ...getAppSrc(resolveOwn('template/src')),
     appTsConfig: resolveOwn('template/tsconfig.json'),
     yarnLockFile: resolveOwn('template/yarn.lock'),
     testsSetup: resolveModule(resolveOwn, 'template/src/setupTests'),
