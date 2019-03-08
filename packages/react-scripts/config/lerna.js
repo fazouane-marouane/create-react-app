@@ -18,6 +18,8 @@ function flattenResults(results) {
   return results.reduce((acc, result) => acc.concat(result), []);
 }
 
+// Sync version of Lerna's makeFileFinder
+// Heavily inspired by https://github.com/lerna/lerna/blob/62843b04e3a5a03012ceabe465519b39a09fbcc1/core/project/lib/make-file-finder.js
 function makeFileFinderSync(rootPath, packageConfigs) {
   const globOpts = {
     cwd: rootPath,
@@ -29,7 +31,10 @@ function makeFileFinderSync(rootPath, packageConfigs) {
 
   if (packageConfigs.some(cfg => cfg.indexOf('**') > -1)) {
     if (packageConfigs.some(cfg => cfg.indexOf('node_modules') > -1)) {
-      throw new ValidationError('EPKGCONFIG', 'An explicit node_modules package path does not allow globstars (**)');
+      throw new ValidationError(
+        'EPKGCONFIG',
+        'An explicit node_modules package path does not allow globstars (**)'
+      );
     }
 
     globOpts.ignore = [
@@ -41,7 +46,7 @@ function makeFileFinderSync(rootPath, packageConfigs) {
 
   return (fileName, fileMapper, customGlobOpts) => {
     const options = Object.assign({}, customGlobOpts, globOpts);
-    const packages = packageConfigs.sort().map((globPath) => {
+    const packages = packageConfigs.sort().map(globPath => {
       const results = globbySync(path.join(globPath, fileName), options).sort();
 
       if (fileMapper) {
@@ -59,9 +64,13 @@ function makeFileFinderSync(rootPath, packageConfigs) {
 module.exports.makeFileFinderSync = makeFileFinderSync;
 
 module.exports.getPackagesSync = function getPackagesSync(project) {
-  const mapper = (packageConfigPath) => {
+  const mapper = packageConfigPath => {
     const packageJson = loadJsonFileSync(packageConfigPath);
-    return new Package(packageJson, path.dirname(packageConfigPath), project.rootPath);
+    return new Package(
+      packageJson,
+      path.dirname(packageConfigPath),
+      project.rootPath
+    );
   };
 
   const finder = makeFileFinderSync(project.rootPath, project.packageConfigs);
