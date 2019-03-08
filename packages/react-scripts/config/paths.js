@@ -22,10 +22,14 @@ const resolveApp = relativePath => path.resolve(appDirectory, relativePath);
 
 const appName = require(resolveApp('package.json')).name;
 
-const getAppSrc = (appSrc) => {
+const getAppSrc = appSrc => {
   const project = new Project(process.cwd());
   const packages = getPackagesSync(project);
-  const packageGraph = new PackageGraph(packages, 'allDependencies', 'forceLocal');
+  const packageGraph = new PackageGraph(
+    packages,
+    'allDependencies',
+    'forceLocal'
+  );
   const currentNode = packageGraph.get(appName);
   if (!currentNode) {
     return {
@@ -33,17 +37,19 @@ const getAppSrc = (appSrc) => {
       fullAppSrcs: appSrc,
     };
   }
-  const currentNodeModules = currentNode.pkg.nodeModulesLocation;
+
   const dependencies = Array.from(currentNode.localDependencies.keys());
 
-  const additionalSrcPaths = dependencies.map((dependencyName) => {
-    const resolvedPath = fs.realpathSync(path.resolve(currentNodeModules, dependencyName));
+  const additionalSrcPaths = dependencies.map(dependencyName => {
+    const resolvedPath = fs.realpathSync(
+      packageGraph.get(dependencyName).location
+    );
     return path.resolve(resolvedPath, 'src');
   });
 
   return {
     appSrc,
-    fullAppSrcs: [appSrc, ...additionalSrcPaths]
+    fullAppSrcs: [appSrc, ...additionalSrcPaths],
   };
 };
 
