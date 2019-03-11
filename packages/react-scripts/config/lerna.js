@@ -8,11 +8,15 @@
 // @remove-on-eject-end
 'use strict';
 
+const path = require('path');
+const fs = require('fs');
+
 const globbySync = require('globby').sync;
 const loadJsonFileSync = require('load-json-file').sync;
-const path = require('path');
 const ValidationError = require('@lerna/validation-error');
 const Package = require('@lerna/package');
+const PackageGraph = require('@lerna/package-graph');
+const Project = require('@lerna/project');
 
 function flattenResults(results) {
   return results.reduce((acc, result) => acc.concat(result), []);
@@ -61,9 +65,7 @@ function makeFileFinderSync(rootPath, packageConfigs) {
   };
 }
 
-module.exports.makeFileFinderSync = makeFileFinderSync;
-
-module.exports.getPackagesSync = function getPackagesSync(project) {
+function getPackagesSync(project) {
   const mapper = packageConfigPath => {
     const packageJson = loadJsonFileSync(packageConfigPath);
     return new Package(
@@ -76,4 +78,47 @@ module.exports.getPackagesSync = function getPackagesSync(project) {
   const finder = makeFileFinderSync(project.rootPath, project.packageConfigs);
 
   return finder('package.json', filePaths => filePaths.map(mapper));
+}
+
+module.exports.getAllLocalDependencies = function getAllLocalDependencies(
+  appName
+) {
+  const project = new Project(process.cwd());
+  const packages = getPackagesSync(project);
+  const packageGraph = new PackageGraph(
+    packages,
+    'allDependencies',
+    'forceLocal'
+  );
+  const currentNode = packageGraph.get(appName);
+  if (!currentNode) {
+    return undefined;
+  }
+
+  const dependencies = new Set(currentNode.localDependencies.keys());
+  const dependenciesToExplore = new Set(dependencies);
+  dependenciesToExplore.delete(appName);
+
+  while (dependenciesToExplore.size > 0) {
+    const packageName = dependenciesToExplore.values().next().value;
+    dependenciesToExplore.delete(packageName);
+    const node = packageGraph.get(packageName);
+    const newDependencies = new Set(node.localDependencies.keys());
+    newDependencies.delete(appName);
+
+    for (const d of newDependencies.values()) {
+      if (!dependencies.has(d)) {
+        dependenciesToExplore.add(d);
+        dependencies.add(d);
+      }
+    }
+  }
+
+  const additionalSrcPaths = Array.from(dependencies).map(dependencyName => {
+    const resolvedPath = fs.realpathSync(
+      packageGraph.get(dependencyName).location
+    );
+    return path.resolve(resolvedPath, 'src');
+  });
+  return additionalSrcPaths;
 };

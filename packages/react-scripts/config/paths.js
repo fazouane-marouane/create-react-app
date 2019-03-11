@@ -11,9 +11,7 @@
 const path = require('path');
 const fs = require('fs');
 const url = require('url');
-const PackageGraph = require('@lerna/package-graph');
-const Project = require('@lerna/project');
-const { getPackagesSync } = require('./lerna');
+const { getAllLocalDependencies } = require('./lerna');
 
 // Make sure any symlinks in the project folder are resolved:
 // https://github.com/facebook/create-react-app/issues/637
@@ -23,33 +21,10 @@ const resolveApp = relativePath => path.resolve(appDirectory, relativePath);
 const appName = require(resolveApp('package.json')).name;
 
 const getAppSrc = appSrc => {
-  const project = new Project(process.cwd());
-  const packages = getPackagesSync(project);
-  const packageGraph = new PackageGraph(
-    packages,
-    'allDependencies',
-    'forceLocal'
-  );
-  const currentNode = packageGraph.get(appName);
-  if (!currentNode) {
-    return {
-      appSrc,
-      fullAppSrcs: appSrc,
-    };
-  }
-
-  const dependencies = Array.from(currentNode.localDependencies.keys());
-
-  const additionalSrcPaths = dependencies.map(dependencyName => {
-    const resolvedPath = fs.realpathSync(
-      packageGraph.get(dependencyName).location
-    );
-    return path.resolve(resolvedPath, 'src');
-  });
-
+  const localDependencies = getAllLocalDependencies(appName);
   return {
     appSrc,
-    fullAppSrcs: [appSrc, ...additionalSrcPaths],
+    fullAppSrcs: localDependencies ? localDependencies.concat(appSrc) : appSrc,
   };
 };
 
